@@ -2,23 +2,18 @@ import copy
 import random
 import time
 
-
-# main game class
 class OthelloGame:
     def __init__(self):
-        # 8x8 board, . is empty
         self.board = [["." for x in range(8)] for y in range(8)]
-        self.turn = "X"  # black starts
-        self.ply_depth = 4  # default depth
-        self.heuristic_type = 1  # default h1
+        self.turn = "X"
+        self.ply_depth = 4
+        self.heuristic_type = 1
 
-        # initial setup
         self.board[3][3] = "O"
         self.board[3][4] = "X"
         self.board[4][3] = "X"
         self.board[4][4] = "O"
 
-    # print board to console
     def show_board(self):
         print("  a b c d e f g h")
         for r in range(8):
@@ -34,7 +29,6 @@ class OthelloGame:
     def get_opp(self, player):
         return "O" if player == "X" else "X"
 
-    # check directions and return flipped pieces
     def check_move(self, r, c, player):
         if self.board[r][c] != ".":
             return []
@@ -50,7 +44,7 @@ class OthelloGame:
                 temp_flip.append((cr, cc))
                 cr += dr
                 cc += dc
-            if self.is_inside(cr, cc) and self.board[cr][cc] == player:
+            if self.is_inside(cr, cc) and self.board[cr][cc] == player and temp_flip:
                 to_flip.extend(temp_flip)
 
         return to_flip
@@ -82,21 +76,15 @@ class OthelloGame:
         o_cnt = sum(row.count("O") for row in self.board)
         return x_cnt, o_cnt
 
-    # --- AI LOGIC ---
-
-    # evaluation functions h1, h2, h3
     def get_eval(self, board_state, player, h_type):
         opp = self.get_opp(player)
 
-        # h1: count diff
         if h_type == 1:
             p_c = sum(row.count(player) for row in board_state)
             o_c = sum(row.count(opp) for row in board_state)
             return p_c - o_c
 
-        # h2: positional weights
         elif h_type == 2:
-            # corners are good, near corners are bad
             weights = [
                 [100, -20, 10, 5, 5, 10, -20, 100],
                 [-20, -50, -2, -2, -2, -2, -50, -20],
@@ -116,9 +104,7 @@ class OthelloGame:
                         score -= weights[r][c]
             return score
 
-        # h3: mobility (count valid moves)
         elif h_type == 3:
-            # create temp game to check moves
             tg = OthelloGame()
             tg.board = [row[:] for row in board_state]
             my_m = len(tg.get_valid_moves(player))
@@ -127,29 +113,30 @@ class OthelloGame:
 
         return 0
 
-    # minimax with alpha beta pruning
     def minimax(self, board_state, depth, alpha, beta, is_max, player):
-        if depth == 0:
-            return self.get_eval(board_state, player, self.heuristic_type), None
-
         opp = self.get_opp(player)
         curr = player if is_max else opp
 
-        # generate moves
+        if depth == 0:
+            return self.get_eval(board_state, player, self.heuristic_type), None
+
         tg = OthelloGame()
         tg.board = [r[:] for r in board_state]
-        moves = tg.get_valid_moves(curr)
+        moves_curr = tg.get_valid_moves(curr)
 
-        if not moves:
-            # no moves, just return score
-            return self.get_eval(board_state, player, self.heuristic_type), None
+        if not moves_curr:
+            moves_opp = tg.get_valid_moves(self.get_opp(curr))
+            if not moves_opp:
+                return self.get_eval(board_state, player, self.heuristic_type), None
+
+            return self.minimax(board_state, depth - 1, alpha, beta, not is_max, player)
 
         best_move = None
 
         if is_max:
             max_eval = -999999999
-            for m in moves:
-                nb = [r[:] for r in board_state]  # copy
+            for m in moves_curr:
+                nb = [r[:] for r in board_state]
                 tg2 = OthelloGame()
                 tg2.board = nb
                 tg2.make_move(m[0], m[1], curr)
@@ -163,9 +150,10 @@ class OthelloGame:
                 if beta <= alpha:
                     break
             return max_eval, best_move
+
         else:
             min_eval = 999999999
-            for m in moves:
+            for m in moves_curr:
                 nb = [r[:] for r in board_state]
                 tg2 = OthelloGame()
                 tg2.board = nb
@@ -185,7 +173,6 @@ class OthelloGame:
         start_t = time.time()
         print(f"AI ({player}) thinking... (Depth: {self.ply_depth}, H: {self.heuristic_type})")
 
-        # call algo
         score, move = self.minimax(self.board, self.ply_depth, -float("inf"), float("inf"), True, player)
 
         end_t = time.time()
@@ -199,12 +186,13 @@ class OthelloGame:
                 return None
 
         m_str = chr(ord("a") + move[1]) + str(move[0] + 1)
-        print(f"AI Move: {m_str}, Heuristic: {self.heuristic_type}, Depth: {self.ply_depth}, Score: {score}, Time: {dur:.4f} sec")
+        print(
+            f"AI Move: {m_str}, Heuristic: {self.heuristic_type}, "
+            f"Depth: {self.ply_depth}, Score: {score}, Time: {dur:.4f} sec"
+        )
 
         return move
 
-
-# --- RUN GAME ---
 if __name__ == "__main__":
     g = OthelloGame()
     print("Othello Project - CSE4082")
@@ -214,26 +202,31 @@ if __name__ == "__main__":
 
     m = input("Choose mode: ")
 
-    # settings for AI
     p1_h = 1
     p2_h = 1
     depth = 4
+    p1_depth = 4
+    p2_depth = 4
 
     if m in ["2", "3"]:
         try:
-            depth = int(input("Enter AI depth (ply): "))
-            g.ply_depth = depth
-            if m == "3":
-                print("Config for AI 1 (Black):")
-                p1_h = int(input("Heuristic (1,2,3): "))
-                print("Config for AI 2 (White):")
-                p2_h = int(input("Heuristic (1,2,3): "))
-            else:
+            if m == "2":
+                depth = int(input("Enter AI depth (ply): "))
+                g.ply_depth = depth
                 g.heuristic_type = int(input("Heuristic for AI (1,2,3): "))
-        except:
-            print("input error, using defaults")
+            else:
+                print("Config for AI 1 (Black / X):")
+                p1_depth = int(input("Depth for AI 1 (Black): "))
+                p1_h = int(input("Heuristic for AI 1 (1,2,3): "))
 
-    # --- GAME LOOP ---
+                print("Config for AI 2 (White / O):")
+                p2_depth = int(input("Depth for AI 2 (White): "))
+                p2_h = int(input("Heuristic for AI 2 (1,2,3): "))
+
+        except Exception as e:
+            print("input error, using defaults")
+            print("Error detail:", e)
+
     while not g.is_game_over():
         g.show_board()
         valid = g.get_valid_moves(g.turn)
@@ -246,7 +239,6 @@ if __name__ == "__main__":
         move = None
         is_human = False
 
-        # Mode logic
         if m == "1":
             is_human = True
         elif m == "2":
@@ -255,15 +247,11 @@ if __name__ == "__main__":
             is_human = False
 
         if is_human:
-            # -- UPDATE: Print valid moves in 'c4' format --
             formatted_moves = []
             for r, c in valid:
-                # convert col index to letter (0->a)
-                # convert row index to number (0->1)
                 m_str = chr(ord("a") + c) + str(r + 1)
                 formatted_moves.append(m_str)
 
-            # join them with commas
             print(f"Valid moves: {', '.join(formatted_moves)}")
 
             u = input(f"Player {g.turn} move (ex: c4): ")
@@ -271,12 +259,10 @@ if __name__ == "__main__":
             try:
                 r, c = -1, -1
 
-                # check if user typed 'c4' style
                 if len(u) == 2 and u[0].isalpha() and u[1].isdigit():
                     c = ord(u[0].lower()) - ord("a")
                     r = int(u[1]) - 1
                 else:
-                    # try old style '3 4' just in case
                     parts = u.split()
                     r, c = int(parts[0]) - 1, int(parts[1]) - 1
 
@@ -289,16 +275,20 @@ if __name__ == "__main__":
                 print("Bad format. Try 'c4' or 'row col'")
                 continue
         else:
-            # AI Turn
             if m == "3":
                 if g.turn == "X":
                     g.heuristic_type = p1_h
+                    g.ply_depth = p1_depth
                 else:
                     g.heuristic_type = p2_h
+                    g.ply_depth = p2_depth
 
-            # small delay to make it readable
-            # time.sleep(1)
             move = g.get_ai_move(g.turn)
+
+            if move is None:
+                print(f"{g.turn} (AI) has no moves, skipping.")
+                g.turn = g.get_opp(g.turn)
+                continue
 
         g.make_move(move[0], move[1], g.turn)
         g.turn = g.get_opp(g.turn)
