@@ -2,6 +2,7 @@ import copy
 import random
 import time
 
+
 class OthelloGame:
     def __init__(self):
         self.board = [["." for x in range(8)] for y in range(8)]
@@ -15,13 +16,14 @@ class OthelloGame:
         self.board[4][4] = "O"
 
     def show_board(self):
-        print("  a b c d e f g h")
+        print("\n  a b c d e f g h")
+        print(" +-----------------")
         for r in range(8):
-            line = str(r + 1) + " "
+            line = str(r + 1) + "|"
             for c in range(8):
                 line += self.board[r][c] + " "
             print(line)
-        print("Current Turn: " + self.turn)
+        print(f"Current Turn: {'Black (X)' if self.turn == 'X' else 'White (O)'}")
 
     def is_inside(self, r, c):
         return 0 <= r < 8 and 0 <= c < 8
@@ -129,12 +131,12 @@ class OthelloGame:
             if not moves_opp:
                 return self.get_eval(board_state, player, self.heuristic_type), None
 
-            return self.minimax(board_state, depth - 1, alpha, beta, not is_max, player)
+            return self.minimax(board_state, depth, alpha, beta, not is_max, player)
 
         best_move = None
 
         if is_max:
-            max_eval = -999999999
+            max_eval = -float("inf")
             for m in moves_curr:
                 nb = [r[:] for r in board_state]
                 tg2 = OthelloGame()
@@ -152,7 +154,7 @@ class OthelloGame:
             return max_eval, best_move
 
         else:
-            min_eval = 999999999
+            min_eval = float("inf")
             for m in moves_curr:
                 nb = [r[:] for r in board_state]
                 tg2 = OthelloGame()
@@ -171,7 +173,7 @@ class OthelloGame:
 
     def get_ai_move(self, player):
         start_t = time.time()
-        print(f"AI ({player}) thinking... (Depth: {self.ply_depth}, H: {self.heuristic_type})")
+        print(f"\n>>> AI ({player}) THINKING... (Depth: {self.ply_depth}, Heuristic: h{self.heuristic_type})")
 
         score, move = self.minimax(self.board, self.ply_depth, -float("inf"), float("inf"), True, player)
 
@@ -186,119 +188,101 @@ class OthelloGame:
                 return None
 
         m_str = chr(ord("a") + move[1]) + str(move[0] + 1)
-        print(
-            f"AI Move: {m_str}, Heuristic: {self.heuristic_type}, "
-            f"Depth: {self.ply_depth}, Score: {score}, Time: {dur:.4f} sec"
-        )
+        print(f">>> AI MOVE: {m_str}")
+        print(f"(Score: {score}, Time: {dur:.4f} seconds)")
 
         return move
 
+
+def get_coord_input(valid_moves):
+    while True:
+        u = input("Enter opponent's move (e.g. c4): ").strip().lower()
+        if u == "exit":
+            return None
+        try:
+            r, c = -1, -1
+            if len(u) == 2 and u[0].isalpha() and u[1].isdigit():
+                c = ord(u[0]) - ord("a")
+                r = int(u[1]) - 1
+            else:
+                print("Invalid format. Please enter like 'c4'.")
+                continue
+
+            if (r, c) in valid_moves:
+                return (r, c)
+            else:
+                print("This move is invalid or against the rules. Please try again.")
+        except:
+            print("Input error.")
+
+
 if __name__ == "__main__":
     g = OthelloGame()
-    print("Othello Project - CSE4082")
-    print("1: Human vs Human")
-    print("2: Human vs AI")
-    print("3: AI vs AI")
+    while True:
+        c_choice = input("Select your team color (Black/White) [B/W]: ").lower()
+        if c_choice in ["b", "w"]:
+            my_color = "X" if c_choice == "b" else "O"
+            break
+        print("Please enter 'B' or 'W'.")
 
-    m = input("Choose mode: ")
+    print(f"You: {'Black (X) - Starting' if my_color == 'X' else 'White (O) - Second'}")
 
-    p1_h = 1
-    p2_h = 1
-    depth = 4
-    p1_depth = 4
-    p2_depth = 4
+    try:
+        h_input = int(input("Select heuristic (1: Coin Parity, 2: Weighted Board, 3: Mobility): "))
+        if h_input in [1, 2, 3]:
+            g.heuristic_type = h_input
+        else:
+            print("Invalid input, default h1 selected.")
+    except:
+        print("Error, default h1 selected.")
 
-    if m in ["2", "3"]:
-        try:
-            if m == "2":
-                depth = int(input("Enter AI depth (ply): "))
-                g.ply_depth = depth
-                g.heuristic_type = int(input("Heuristic for AI (1,2,3): "))
-            else:
-                print("Config for AI 1 (Black / X):")
-                p1_depth = int(input("Depth for AI 1 (Black): "))
-                p1_h = int(input("Heuristic for AI 1 (1,2,3): "))
+    try:
+        d_input = int(input("Enter depth (Ply) (Tournament: 4 or 6): "))
+        g.ply_depth = d_input
+    except:
+        print("Error, default 4-ply selected.")
 
-                print("Config for AI 2 (White / O):")
-                p2_depth = int(input("Depth for AI 2 (White): "))
-                p2_h = int(input("Heuristic for AI 2 (1,2,3): "))
-
-        except Exception as e:
-            print("input error, using defaults")
-            print("Error detail:", e)
+    print("\n--- GAME STARTING ---\n")
 
     while not g.is_game_over():
         g.show_board()
         valid = g.get_valid_moves(g.turn)
 
         if not valid:
-            print(f"{g.turn} has no moves, skipping.")
+            print(f"{g.turn} player has no moves, PASSING.")
             g.turn = g.get_opp(g.turn)
             continue
 
         move = None
-        is_human = False
 
-        if m == "1":
-            is_human = True
-        elif m == "2":
-            is_human = g.turn == "X"
-        elif m == "3":
-            is_human = False
-
-        if is_human:
-            formatted_moves = []
-            for r, c in valid:
-                m_str = chr(ord("a") + c) + str(r + 1)
-                formatted_moves.append(m_str)
-
-            print(f"Valid moves: {', '.join(formatted_moves)}")
-
-            u = input(f"Player {g.turn} move (ex: c4): ")
-
-            try:
-                r, c = -1, -1
-
-                if len(u) == 2 and u[0].isalpha() and u[1].isdigit():
-                    c = ord(u[0].lower()) - ord("a")
-                    r = int(u[1]) - 1
-                else:
-                    parts = u.split()
-                    r, c = int(parts[0]) - 1, int(parts[1]) - 1
-
-                if (r, c) in valid:
-                    move = (r, c)
-                else:
-                    print("Invalid move, try again.")
-                    continue
-            except:
-                print("Bad format. Try 'c4' or 'row col'")
-                continue
-        else:
-            if m == "3":
-                if g.turn == "X":
-                    g.heuristic_type = p1_h
-                    g.ply_depth = p1_depth
-                else:
-                    g.heuristic_type = p2_h
-                    g.ply_depth = p2_depth
-
+        if g.turn == my_color:
             move = g.get_ai_move(g.turn)
+            if move:
+                g.make_move(move[0], move[1], g.turn)
+            else:
+                print("AI move generation failed!")
 
+        else:
+            print(f"\nOpponent's Turn ({'Black' if g.turn == 'X' else 'White'}).")
+            formatted_moves = [chr(ord("a") + c) + str(r + 1) for r, c in valid]
+            print(f"Opponent's possible moves: {', '.join(formatted_moves)}")
+
+            move = get_coord_input(valid)
             if move is None:
-                print(f"{g.turn} (AI) has no moves, skipping.")
-                g.turn = g.get_opp(g.turn)
-                continue
+                print("Game cancelled.")
+                break
+            g.make_move(move[0], move[1], g.turn)
 
-        g.make_move(move[0], move[1], g.turn)
         g.turn = g.get_opp(g.turn)
 
     g.show_board()
     x, o = g.count_score()
-    print(f"Game Over! X: {x}, O: {o}")
+    print("==========================================")
+    print(f"GAME ENDED! Score -> Black (X): {x}, White (O): {o}")
+
     if x > o:
-        print("Black Wins")
+        print("Winner: Black" + (" (YOU)" if my_color == "X" else " (OPPONENT)"))
     elif o > x:
-        print("White Wins")
+        print("Winner: White" + (" (YOU)" if my_color == "O" else " (OPPONENT)"))
     else:
-        print("Draw")
+        print("TIE! (Tie-break rules should be applied)")
